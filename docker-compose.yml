@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:14
+    container_name: node-react-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nest
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Server
+  server:
+    build:
+      context: ./server
+    container_name: node-react-server
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/nest
+      - JWT_SECRET=your_jwt_secret
+      - PORT=3000
+      - NODE_ENV=development
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Don't mount node_modules
+      - ./server/src:/app/src
+      - ./server/prisma:/app/prisma
+      - ./server/tsconfig.json:/app/tsconfig.json
+      - ./server/tsconfig.build.json:/app/tsconfig.build.json
+      - ./server/nest-cli.json:/app/nest-cli.json
+      - ./server/.env:/app/.env
+    restart: unless-stopped
+
+  # React Client
+  client:
+    build:
+      context: ./client
+    container_name: node-react-client
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+volumes:
+  postgres_data: 

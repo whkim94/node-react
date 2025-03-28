@@ -1,4 +1,4 @@
-# Invoice Management System
+# README
 
 This project consists of a NestJS backend API and a React frontend client for managing invoices.
 

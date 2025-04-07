@@ -1,17 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 import { LoginDto } from './dto/login.dto';
 import { AuthenticationFailedException } from '../common/exceptions';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-  ) {}
+  constructor(private usersService: UsersService) {}
 
   async login(loginDto: LoginDto) {
     const user = await this.usersService.findOne(loginDto.email);
@@ -31,7 +28,7 @@ export class AuthService {
 
     const payload = { sub: user.id, email: user.email };
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.generateToken(payload),
       user: {
         id: user.id,
         email: user.email,
@@ -49,12 +46,16 @@ export class AuthService {
 
     // Return the token and user information
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.generateToken(payload),
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
       },
     };
+  }
+
+  private generateToken(payload: any): string {
+    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
   }
 }

@@ -4,17 +4,21 @@ interface PaginationProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-  hasNextPage: boolean;
-  hasPreviousPage: boolean;
+  hasNextPage?: boolean;
+  hasPreviousPage?: boolean;
 }
 
 const Pagination: React.FC<PaginationProps> = ({
   currentPage,
   totalPages,
   onPageChange,
-  hasNextPage,
-  hasPreviousPage,
+  hasNextPage: propHasNextPage,
+  hasPreviousPage: propHasPreviousPage,
 }) => {
+  // Calculate next/previous page availability if not provided
+  const hasNextPage = propHasNextPage !== undefined ? propHasNextPage : currentPage < totalPages;
+  const hasPreviousPage = propHasPreviousPage !== undefined ? propHasPreviousPage : currentPage > 1;
+
   // Generate page numbers to display
   const getPageNumbers = () => {
     const pages = [];

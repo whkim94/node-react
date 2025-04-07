@@ -1,23 +1,20 @@
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '../store';
-import { clearSelectedInvoice } from '../store/slices/invoiceSlice';
+import { closeInvoiceModal } from '../store/slices/invoiceSlice';
 import { Invoice } from '../types';
 
 interface InvoiceModalProps {
-  isOpen: boolean;
   invoice: Invoice | null | undefined;
   onClose: () => void;
 }
 
-const InvoiceModal = ({ isOpen, onClose, invoice }: InvoiceModalProps) => {
+const InvoiceModal = ({ onClose, invoice }: InvoiceModalProps) => {
   const dispatch = useDispatch<AppDispatch>();
 
   const handleClose = () => {
     onClose();
-    dispatch(clearSelectedInvoice());
+    dispatch(closeInvoiceModal());
   };
-
-  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

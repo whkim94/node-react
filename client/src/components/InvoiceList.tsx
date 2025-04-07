@@ -1,9 +1,19 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { useDispatch, useSelector } from 'react-redux';
 import InvoiceModal from './InvoiceModal';
 import Pagination from './Pagination';
 import { useInvoices, useInvoice } from '../hooks/useInvoices';
 import { Invoice } from '../types';
+import { RootState } from '../store';
+import { 
+  setSelectedInvoiceIds, 
+  clearSelectedInvoices, 
+  toggleInvoiceSelection,
+  updateSortOptions,
+  openInvoiceModal,
+  closeInvoiceModal
+} from '../store/slices/invoiceSlice';
 
 // Define a schema for invoice validation
 const invoiceSchema = z.object({
@@ -16,7 +26,7 @@ const invoiceSchema = z.object({
   paid: z.boolean(),
 });
 
-// Example function to validate invoices
+// Function to validate invoices
 const validateInvoices = (invoices: Invoice[]) => {
   return invoices.map((invoice) => {
     // Create a copy with absolute value for amount
@@ -37,13 +47,17 @@ const validateInvoices = (invoices: Invoice[]) => {
 };
 
 const InvoiceList = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
-  const [selectAll, setSelectAll] = useState(false);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
+  const dispatch = useDispatch();
   
-  // Pagination state
+  // Get UI state from Redux
+  const { 
+    selectedInvoiceIds, 
+    sortOptions, 
+    isModalOpen, 
+    currentInvoiceId 
+  } = useSelector((state: RootState) => state.invoiceUI);
+  
+  // Local state for pagination (could be moved to Redux if needed across components)
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -55,8 +69,8 @@ const InvoiceList = () => {
   } = useInvoices({
     page: currentPage,
     limit: itemsPerPage,
-    sortBy: sortOrder ? 'amount' : 'createdAt',
-    order: sortOrder || 'desc'
+    sortBy: sortOptions.field,
+    order: sortOptions.direction
   });
   
   // Extract data and pagination metadata
@@ -74,55 +88,44 @@ const InvoiceList = () => {
   };
   
   // Fetch selected invoice details
-  const { data: selectedInvoice } = useInvoice(selectedInvoiceId);
+  const { data: selectedInvoice } = useInvoice(currentInvoiceId);
 
   // Memoize validated invoices to prevent unnecessary recalculations
   const validatedInvoices = useMemo(() => {
     return validateInvoices(invoices);
   }, [invoices]);
 
-  // Memoize sorted invoices to prevent unnecessary recalculations
-  const sortedInvoices = useMemo(() => {
-    if (!sortOrder) return validatedInvoices;
-    
-    return [...validatedInvoices].sort((a, b) => {
-      return sortOrder === 'asc' ? a.amount - b.amount : b.amount - a.amount;
-    });
-  }, [validatedInvoices, sortOrder]);
-
   const handleInvoiceClick = useCallback((id: string) => {
-    setSelectedInvoiceId(id);
-    setIsModalOpen(true);
-  }, []);
+    dispatch(openInvoiceModal(id));
+  }, [dispatch]);
 
   const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-    setSelectedInvoiceId(null);
-  }, []);
+    dispatch(closeInvoiceModal());
+  }, [dispatch]);
 
   const handleSelectAll = useCallback(() => {
-    if (selectAll) {
-      setSelectedInvoices([]);
+    if (selectedInvoiceIds.length === validatedInvoices.length) {
+      dispatch(clearSelectedInvoices());
     } else {
-      setSelectedInvoices(validatedInvoices.map((invoice) => invoice.id));
+      dispatch(setSelectedInvoiceIds(validatedInvoices.map((invoice) => invoice.id)));
     }
-    setSelectAll(!selectAll);
-  }, [selectAll, validatedInvoices]);
+  }, [dispatch, selectedInvoiceIds.length, validatedInvoices]);
 
-  const handleCheckboxChange = useCallback((e: React.MouseEvent<HTMLInputElement>, id: string) => {
+  const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, id: string) => {
     e.stopPropagation();
-    setSelectedInvoices((prev) =>
-      prev.includes(id) ? prev.filter((invoiceId) => invoiceId !== id) : [...prev, id]
-    );
-  }, []);
+    dispatch(toggleInvoiceSelection(id));
+  }, [dispatch]);
 
   const handleSortByAmount = useCallback(() => {
-    setSortOrder((prevOrder) => {
-      if (prevOrder === 'asc') return 'desc';
-      if (prevOrder === 'desc') return null;
-      return 'asc';
-    });
-  }, []);
+    // Toggle sorting: asc -> desc -> none -> asc
+    if (sortOptions.field !== 'amount') {
+      dispatch(updateSortOptions({ field: 'amount', direction: 'asc' }));
+    } else if (sortOptions.direction === 'asc') {
+      dispatch(updateSortOptions({ direction: 'desc' }));
+    } else {
+      dispatch(updateSortOptions({ field: 'createdAt', direction: 'desc' }));
+    }
+  }, [dispatch, sortOptions]);
   
   const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
@@ -134,6 +137,9 @@ const InvoiceList = () => {
   }, []);
 
   if (error) return <div className="text-center py-10 text-red-500">{error ? String(error) : 'An error occurred'}</div>;
+
+  // Determine if "select all" is checked
+  const selectAll = selectedInvoiceIds.length === validatedInvoices.length && validatedInvoices.length > 0;
 
   return (
     <div className="mx-0">
@@ -175,7 +181,9 @@ const InvoiceList = () => {
                     <div className="flex justify-between items-center">
                       <span>Amount</span>
                       <span>
-                        {sortOrder === 'asc' ? '▲' : sortOrder === 'desc' ? '▼' : '↕'}
+                        {sortOptions.field === 'amount' 
+                          ? (sortOptions.direction === 'asc' ? '▲' : '▼') 
+                          : '↕'}
                       </span>
                     </div>
                   </th>
@@ -185,47 +193,48 @@ const InvoiceList = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sortedInvoices.length === 0 ? (
+                {validatedInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                       No invoices found
                     </td>
                   </tr>
                 ) : (
-                  sortedInvoices.map((invoice) => (
+                  validatedInvoices.map((invoice) => (
                     <tr 
                       key={invoice.id} 
                       onClick={() => handleInvoiceClick(invoice.id)}
                       className="hover:bg-gray-50 cursor-pointer"
                     >
-                      <td className="px-4 py-4 whitespace-nowrap border">
-                        <input
-                          type="checkbox"
-                          checked={selectedInvoices.includes(invoice.id)}
-                          onClick={(e) => handleCheckboxChange(e, invoice.id)}
-                          onChange={() => {}} // Add empty onChange to prevent React warning
-                        />
-                        <span className="ml-2 text-sm">{new Date(invoice.createdAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap border">
-                        <div className="text-sm font-medium text-gray-900">{invoice.vendorName}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap border">
-                        <div className="text-sm text-gray-900">{invoice.description}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap border">
-                        <div className="text-sm text-gray-900">{new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap border">
-                        <div className="text-sm text-gray-900 italic">
-                          {invoice.amount === 0 ? '' : `$ ${invoice.amount.toFixed(2)}`}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            className="mr-2"
+                            checked={selectedInvoiceIds.includes(invoice.id)}
+                            onChange={(e) => handleCheckboxChange(e, invoice.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          {new Date(invoice.createdAt).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap border">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          invoice.paid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {invoice.paid ? 'Paid' : 'Open'}
+                      <td className="px-6 py-4 whitespace-nowrap">{invoice.vendorName}</td>
+                      <td className="px-6 py-4 truncate max-w-xs">{invoice.description}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {new Date(invoice.dueDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        ${invoice.amount.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            invoice.paid
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
+                        >
+                          {invoice.paid ? 'Paid' : 'Unpaid'}
                         </span>
                       </td>
                     </tr>
@@ -234,42 +243,78 @@ const InvoiceList = () => {
               </tbody>
             </table>
             
-            <div className="flex justify-between items-center px-6 py-4 bg-gray-50">
-              <div className="flex items-center">
-                <span className="text-sm text-gray-600">Show</span>
-                <select
-                  className="mx-2 border rounded px-2 py-1 text-sm"
-                  value={itemsPerPage}
-                  onChange={handleItemsPerPageChange}
+            {/* Pagination component */}
+            <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={!paginationMeta.hasPreviousPage}
+                  className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                    paginationMeta.hasPreviousPage
+                      ? 'bg-white text-gray-700 hover:bg-gray-50'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                </select>
-                <span className="text-sm text-gray-600">entries</span>
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!paginationMeta.hasNextPage}
+                  className={`ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${
+                    paginationMeta.hasNextPage
+                      ? 'bg-white text-gray-700 hover:bg-gray-50'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Next
+                </button>
               </div>
-              
-              <Pagination
-                currentPage={paginationMeta.page}
-                totalPages={paginationMeta.totalPages}
-                onPageChange={handlePageChange}
-                hasNextPage={paginationMeta.hasNextPage}
-                hasPreviousPage={paginationMeta.hasPreviousPage}
-              />
-              
-              <div className="text-sm text-gray-600">
-                Showing {paginationMeta.total > 0 ? (paginationMeta.page - 1) * paginationMeta.limit + 1 : 0} to {Math.min(paginationMeta.page * paginationMeta.limit, paginationMeta.total)} of {paginationMeta.total} entries
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * itemsPerPage, paginationMeta.total)}
+                    </span>{' '}
+                    of <span className="font-medium">{paginationMeta.total}</span> results
+                  </p>
+                </div>
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={paginationMeta.totalPages}
+                  onPageChange={handlePageChange}
+                />
               </div>
             </div>
           </>
         )}
       </div>
-      <InvoiceModal 
-        isOpen={isModalOpen} 
-        onClose={handleCloseModal} 
-        invoice={selectedInvoice} 
-      />
+      
+      {/* Item per page selection */}
+      <div className="mt-4 flex justify-end">
+        <label htmlFor="itemsPerPage" className="mr-2 text-sm text-gray-700 flex items-center">
+          Items per page:
+        </label>
+        <select
+          id="itemsPerPage"
+          className="border border-gray-300 rounded-md py-1 pl-2 pr-8 text-sm"
+          value={itemsPerPage}
+          onChange={handleItemsPerPageChange}
+        >
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      
+      {/* Invoice detail modal */}
+      {isModalOpen && (
+        <InvoiceModal
+          invoice={selectedInvoice}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 };

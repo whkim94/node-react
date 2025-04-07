@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { register } from '../store/slices/authSlice';
-import { AppDispatch, RootState } from '../store';
-import { useNavigate, Link } from 'react-router-dom';
+import { useSelector } from 'react-redux';
+import { useRegister } from '../hooks/useAuth';
+import { RootState } from '../store';
+import { Link } from 'react-router-dom';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -16,9 +16,8 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
-  const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
-  const { loading, error } = useSelector((state: RootState) => state.auth);
+  const { error } = useSelector((state: RootState) => state.auth);
+  const registerMutation = useRegister();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,11 +37,8 @@ const Register = () => {
     // Clear any previous errors
     setErrors({});
 
-    // Dispatch register action
-    const registerResult = await dispatch(register({ name, email, password }));
-    if (register.fulfilled.match(registerResult)) {
-      navigate('/invoices');
-    }
+    // Register using React Query mutation
+    registerMutation.mutate({ name, email, password });
   };
 
   return (
@@ -108,15 +104,19 @@ const Register = () => {
             </div>
           </div>
 
-          {error && <div className="text-red-500 text-sm">{error}</div>}
+          {(error || registerMutation.error) && (
+            <div className="text-red-500 text-sm">
+              {error || (registerMutation.error as Error)?.message || 'An error occurred during registration'}
+            </div>
+          )}
 
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={registerMutation.isPending}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {loading ? 'Creating account...' : 'Create account'}
+              {registerMutation.isPending ? 'Creating account...' : 'Create account'}
             </button>
           </div>
           

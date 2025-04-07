@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { login } from '../store/slices/authSlice';
-import { AppDispatch, RootState } from '../store';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 import { useNavigate, Link } from 'react-router-dom';
 import { z } from 'zod';
+import { useLogin } from '../hooks/useAuth';
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -14,9 +14,9 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { loading, error } = useSelector((state: RootState) => state.auth);
+  const { error } = useSelector((state: RootState) => state.auth);
+  const loginMutation = useLogin();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +31,15 @@ const Login = () => {
       return;
     }
 
-    const loginResult = await dispatch(login({ email, password }));
-    if (login.fulfilled.match(loginResult)) {
-      navigate('/invoices');
-    }
+    // Clear any previous errors
+    setErrors({});
+
+    // Use React Query mutation
+    loginMutation.mutate({ email, password }, {
+      onSuccess: () => {
+        navigate('/invoices');
+      }
+    });
   };
 
   return (
@@ -83,15 +88,19 @@ const Login = () => {
             </div>
           </div>
 
-          {error && <div className="text-red-500 text-sm">{error}</div>}
+          {(error || loginMutation.error) && (
+            <div className="text-red-500 text-sm">
+              {error || (loginMutation.error as Error)?.message || 'An error occurred during login'}
+            </div>
+          )}
 
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loginMutation.isPending}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
           
@@ -107,4 +116,4 @@ const Login = () => {
   );
 };
 
-export default Login; 
+export default Login;

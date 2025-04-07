@@ -1,99 +1,95 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import api from '../../utils/axiosConfig';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-interface Invoice {
-  id: string;
-  vendorName: string;
-  amount: number;
-  dueDate: string;
-  description: string;
-  paid: boolean;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
+// Define types for filter and sorting options
+interface FilterOptions {
+  searchTerm: string;
+  status: 'all' | 'paid' | 'unpaid';
+  dateRange: {
+    start: string | null;
+    end: string | null;
+  };
 }
 
-interface InvoiceState {
-  invoices: Invoice[];
-  selectedInvoice: Invoice | null;
-  loading: boolean;
-  error: string | null;
+interface SortOptions {
+  field: string;
+  direction: 'asc' | 'desc';
 }
 
-const initialState: InvoiceState = {
-  invoices: [],
-  selectedInvoice: null,
-  loading: false,
-  error: null,
-};
+interface InvoiceUIState {
+  selectedInvoiceIds: string[];
+  filterOptions: FilterOptions;
+  sortOptions: SortOptions;
+  isModalOpen: boolean;
+  currentInvoiceId: string | null;
+}
 
-export const fetchInvoices = createAsyncThunk(
-  'invoices/fetchAll',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await api.get('/invoices');
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        return rejectWithValue(error.response.data.message || 'Failed to fetch invoices');
-      }
-      return rejectWithValue('Failed to fetch invoices');
-    }
-  }
-);
-
-export const fetchInvoiceById = createAsyncThunk(
-  'invoices/fetchById',
-  async (id: string, { rejectWithValue }) => {
-    try {
-      const response = await api.get(`/invoices/${id}`);
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        return rejectWithValue(error.response.data.message || 'Failed to fetch invoice');
-      }
-      return rejectWithValue('Failed to fetch invoice');
-    }
-  }
-);
-
-const invoiceSlice = createSlice({
-  name: 'invoices',
-  initialState,
-  reducers: {
-    clearSelectedInvoice: (state) => {
-      state.selectedInvoice = null;
+const initialState: InvoiceUIState = {
+  selectedInvoiceIds: [],
+  filterOptions: {
+    searchTerm: '',
+    status: 'all',
+    dateRange: {
+      start: null,
+      end: null,
     },
   },
-  extraReducers: (builder) => {
-    builder
-      .addCase(fetchInvoices.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchInvoices.fulfilled, (state, action) => {
-        state.loading = false;
-        state.invoices = action.payload;
-      })
-      .addCase(fetchInvoices.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-      .addCase(fetchInvoiceById.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchInvoiceById.fulfilled, (state, action) => {
-        state.loading = false;
-        state.selectedInvoice = action.payload;
-      })
-      .addCase(fetchInvoiceById.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      });
+  sortOptions: {
+    field: 'createdAt',
+    direction: 'desc',
+  },
+  isModalOpen: false,
+  currentInvoiceId: null,
+};
+
+const invoiceSlice = createSlice({
+  name: 'invoiceUI',
+  initialState,
+  reducers: {
+    setSelectedInvoiceIds: (state, action: PayloadAction<string[]>) => {
+      state.selectedInvoiceIds = action.payload;
+    },
+    toggleInvoiceSelection: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      if (state.selectedInvoiceIds.includes(id)) {
+        state.selectedInvoiceIds = state.selectedInvoiceIds.filter(
+          (invoiceId) => invoiceId !== id
+        );
+      } else {
+        state.selectedInvoiceIds.push(id);
+      }
+    },
+    clearSelectedInvoices: (state) => {
+      state.selectedInvoiceIds = [];
+    },
+    updateFilterOptions: (state, action: PayloadAction<Partial<FilterOptions>>) => {
+      state.filterOptions = { ...state.filterOptions, ...action.payload };
+    },
+    updateSortOptions: (state, action: PayloadAction<Partial<SortOptions>>) => {
+      state.sortOptions = { ...state.sortOptions, ...action.payload };
+    },
+    resetFilters: (state) => {
+      state.filterOptions = initialState.filterOptions;
+    },
+    openInvoiceModal: (state, action: PayloadAction<string | null>) => {
+      state.isModalOpen = true;
+      state.currentInvoiceId = action.payload;
+    },
+    closeInvoiceModal: (state) => {
+      state.isModalOpen = false;
+      state.currentInvoiceId = null;
+    },
   },
 });
 
-export const { clearSelectedInvoice } = invoiceSlice.actions;
+export const {
+  setSelectedInvoiceIds,
+  toggleInvoiceSelection,
+  clearSelectedInvoices,
+  updateFilterOptions,
+  updateSortOptions,
+  resetFilters,
+  openInvoiceModal,
+  closeInvoiceModal,
+} = invoiceSlice.actions;
+
 export default invoiceSlice.reducer; 

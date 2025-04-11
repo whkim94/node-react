@@ -1,26 +1,40 @@
 import { useMutation } from '@tanstack/react-query';
-import axios from 'axios';
-import { API_BASE_URL } from '../config/api';
+import api from '../utils/axiosConfig';
 import { useDispatch } from 'react-redux';
 import { login, logout, setError } from '../store/slices/authSlice';
+import { AxiosError } from 'axios';
 
-// This hook handles the API call with React Query
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+interface AuthResponse {
+  access_token: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+}
+
+// This hook handles authentication API call with React Query
 export const useLogin = () => {
   const dispatch = useDispatch();
   
-  return useMutation({
-    mutationFn: async (credentials: { email: string; password: string }) => {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
+  return useMutation<AuthResponse, AxiosError, LoginCredentials>({
+    mutationFn: async (credentials: LoginCredentials) => {
+      const response = await api.post<AuthResponse>('/auth/login', credentials);
       return response.data;
     },
     onSuccess: (data) => {
       // On successful API call, update Redux store for client state management
       dispatch(login(data));
     },
-    onError: (error) => {
+    onError: (error: AxiosError) => {
       let errorMessage = 'Login failed';
-      if (axios.isAxiosError(error) && error.response) {
-        errorMessage = error.response.data.message || errorMessage;
+      if (error.response?.data && typeof error.response.data === 'object') {
+        errorMessage = (error.response.data as any).message || errorMessage;
       }
       dispatch(setError(errorMessage));
       return errorMessage;
@@ -31,19 +45,19 @@ export const useLogin = () => {
 export const useRegister = () => {
   const dispatch = useDispatch();
   
-  return useMutation({
+  return useMutation<AuthResponse, AxiosError, { name: string; email: string; password: string }>({
     mutationFn: async (userData: { name: string; email: string; password: string }) => {
-      const response = await axios.post(`${API_BASE_URL}/auth/register`, userData);
+      const response = await api.post<AuthResponse>('/auth/register', userData);
       return response.data;
     },
     onSuccess: (data) => {
       // On successful registration, update Redux store for client state management
       dispatch(login(data));
     },
-    onError: (error) => {
+    onError: (error: AxiosError) => {
       let errorMessage = 'Registration failed';
-      if (axios.isAxiosError(error) && error.response) {
-        errorMessage = error.response.data.message || errorMessage;
+      if (error.response?.data && typeof error.response.data === 'object') {
+        errorMessage = (error.response.data as any).message || errorMessage;
       }
       dispatch(setError(errorMessage));
       return errorMessage;
@@ -51,6 +65,7 @@ export const useRegister = () => {
   });
 };
 
+// Simple hook to handle logout
 export const useLogout = () => {
   const dispatch = useDispatch();
   

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { InvoicesService } from './invoices.service';
+import { GetInvoicesDto } from './dto/get-invoices.dto';
 
 @Controller('invoices')
 @UseGuards(JwtAuthGuard)
@@ -15,19 +16,8 @@ export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
   @Get()
-  findAll(
-    @Request() req,
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
-    @Query('sortBy') sortBy = 'createdAt',
-    @Query('order') order = 'desc',
-  ) {
-    return this.invoicesService.findAll(req.user.userId, {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      sortBy,
-      order: order.toLowerCase() === 'asc' ? 'asc' : 'desc',
-    });
+  findAll(@Request() req, @Query() queryParams: GetInvoicesDto) {
+    return this.invoicesService.findAll(req.user.userId, queryParams);
   }
 
   @Get(':id')

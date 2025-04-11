@@ -1,19 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InsufficientPermissionsException } from '../common/exceptions';
-
-interface PaginationOptions {
-  page: number;
-  limit: number;
-  sortBy: string;
-  order: 'asc' | 'desc';
-}
+import { GetInvoicesDto } from './dto/get-invoices.dto';
 
 @Injectable()
 export class InvoicesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(userId: string, options: PaginationOptions) {
+  async findAll(userId: string, options: GetInvoicesDto) {
     const { page, limit, sortBy, order } = options;
 
     // Ensure limit is a valid number
